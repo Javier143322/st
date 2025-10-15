@@ -1,4 +1,4 @@
--- client/client.lua
+-- client/client.lua (CÓDIGO COMPLETO FINAL)
 
 local ESX = nil
 local isNearNPC = false
@@ -21,16 +21,9 @@ end
 
 -- Función para comprobar si un ped es un NPC válido
 local function IsValidDealerTarget(ped)
-    -- Lógica para filtrar NPCs (no jugadores, no en vehículos, no policías/EMS, etc.)
-    if IsPedAPlayer(ped) or IsPedInAnyVehicle(ped, false) then
+    if IsPedAPlayer(ped) or IsPedInAnyVehicle(ped, false) or IsPedDeadOrDying(ped, true) then
         return false
     end
-    
-    -- Filtro adicional para evitar errores comunes
-    if IsPedDeadOrDying(ped, true) then
-        return false
-    end
-
     -- Lógica adicional de filtrado aquí...
     return true
 end
@@ -42,9 +35,8 @@ Citizen.CreateThread(function()
         local playerPed = GetPlayerPed(-1)
         local playerCoords = GetEntityCoords(playerPed)
 
-        isNearNPC = false -- Resetear en cada ciclo
+        isNearNPC = false
 
-        -- Buscar todos los peds en el área
         for _, ped in ipairs(GetGamePool('CPed')) do
             if ped ~= playerPed and IsValidDealerTarget(ped) then
                 local pedCoords = GetEntityCoords(ped)
@@ -55,14 +47,12 @@ Citizen.CreateThread(function()
                     isNearNPC = true
                     currentNPC = ped
 
-                    -- 1. Mostrar texto de interacción (Tecla E)
                     ESX.ShowHelpNotification("Pulsa ~INPUT_CONTEXT~ para ofrecer droga al peatón.", 1)
 
-                    -- 2. Detección de la tecla
-                    if IsControlJustPressed(0, 38) then -- 38 es la tecla INPUT_CONTEXT (E)
+                    if IsControlJustPressed(0, 38) then
                         TriggerEvent('streetdealer:client:iniciarVenta', currentNPC)
                     end
-                    break -- Salir del bucle una vez que encontramos un NPC
+                    break
                 end
             end
         end
@@ -75,7 +65,6 @@ end)
 RegisterNetEvent('streetdealer:client:iniciarVenta', function(npc)
     if not isNearNPC or npc ~= currentNPC then return end
 
-    -- *** NUEVO: DESACTIVAR CONTROLES MIENTRAS EL MENÚ ESTÁ ABIERTO ***
     SetPlayerControl(PlayerId(), false, false)
 
     -- 1. Detener al NPC
@@ -89,16 +78,29 @@ RegisterNetEvent('streetdealer:client:iniciarVenta', function(npc)
         for drugName, count in pairs(drogas) do
             local drugConfig = Config.Drogas[drugName]
             if drugConfig then
+                local playerCoords = GetEntityCoords(GetPlayerPed(-1))
+                -- Obtener la zona para estimación de precio
+                local zoneName = GetLabelText(GetNameOfZone(playerCoords.x, playerCoords.y, playerCoords.z))
+                local zoneConfig = Config.ZonasDeVenta[zoneName] or Config.ZonasDeVenta['DEFAULT']
+                local multiplier = zoneConfig.multiplier
+
+                local estimatedMin = math.floor(drugConfig.minPrice * multiplier)
+                local estimatedMax = math.floor(drugConfig.maxPrice * multiplier)
+
                 table.insert(elements, {
                     label = drugConfig.label .. ' (' .. count .. ' uds.)',
                     value = drugName,
-                    price = drugConfig.minPrice .. ' - ' .. drugConfig.maxPrice
+                    price = 'Est: ' .. estimatedMin .. ' - ' .. estimatedMax .. '$'
                 })
             end
         end
 
         -- 3. Mostrar el menú de venta
         if #elements > 0 then
+            -- OBTENER LA ZONA AQUI PARA ENVIARLA AL SERVIDOR
+            local playerCoords = GetEntityCoords(GetPlayerPed(-1))
+            local zoneName = GetLabelText(GetNameOfZone(playerCoords.x, playerCoords.y, playerCoords.z))
+
             ESX.UI.Menu.Open(
                 'default', GetCurrentResourceName(), 'street_dealer_menu',
                 {
@@ -107,68 +109,59 @@ RegisterNetEvent('streetdealer:client:iniciarVenta', function(npc)
                     elements = elements,
                 },
                 function(data, menu)
-                    -- El jugador selecciona una droga
                     local drugName = data.current.value
                     menu.close()
 
-                    -- Iniciar el proceso de animación ANTES de hablar con el servidor
                     TriggerEvent('streetdealer:client:playDealAnim')
 
-                    -- Enviar al servidor para procesar
-                    TriggerServerEvent('streetdealer:server:procesarVenta', drugName, currentNPC)
+                    -- ENVIAR EL NOMBRE DE LA ZONA AL SERVIDOR
+                    TriggerServerEvent('streetdealer:server:procesarVenta', drugName, currentNPC, zoneName)
 
                 end,
                 function(data, menu)
-                    -- Cuando el jugador cierra el menú
                     menu.close()
                     TriggerEvent('streetdealer:client:resetNPC', currentNPC)
                 end
             )
         else
             ESX.ShowNotification("No tienes drogas para vender.")
-            TriggerEvent('streetdealer:client:resetNPC', currentNPC) -- Resetear NPC aunque no haya drogas
+            TriggerEvent('streetdealer:client:resetNPC', currentNPC)
         end
     end)
 end)
 
--- *** NUEVA FUNCIÓN: Animación del Trato ***
+-- Función: Animación del Trato
 RegisterNetEvent('streetdealer:client:playDealAnim', function()
     local playerPed = GetPlayerPed(-1)
     local animDict = 'mp_common'
-    local animName = 'givetake_a' -- Animación de pase de mano rápido
+    local animName = 'givetake_a' 
     
-    -- Asegurar que el NPC sigue existiendo
     if currentNPC and DoesEntityExist(currentNPC) then
         
         LoadAnimDict(animDict)
 
-        -- Reproducir animación en el NPC y el Jugador simultáneamente
+        -- Dar la espalda al NPC para la animación de 'pase rápido'
+        TaskTurnPedToFaceEntity(playerPed, currentNPC, 500)
+        Citizen.Wait(500)
+        
         TaskPlayAnim(playerPed, animDict, animName, 8.0, 8.0, Config.Riesgo.TiempoAnimacion, 0, 0, false, false, false)
         TaskPlayAnim(currentNPC, animDict, animName, 8.0, 8.0, Config.Riesgo.TiempoAnimacion, 0, 0, false, false, false)
 
-        -- Esperar la duración de la animación (tiempo configurado en config.lua)
         Citizen.Wait(Config.Riesgo.TiempoAnimacion)
         
-        -- Detener animaciones forzosamente (aunque deberían terminar solas)
         StopAnimTask(playerPed, animDict, animName, -4.0)
         StopAnimTask(currentNPC, animDict, animName, -4.0)
     end
 end)
 
--- *** NUEVA FUNCIÓN: Reseteo del NPC (Llamada desde el servidor al finalizar) ***
+-- Función: Reseteo del NPC
 RegisterNetEvent('streetdealer:client:resetNPC', function(npc)
-    -- 1. Devolver el control al jugador (es crucial)
     SetPlayerControl(PlayerId(), true, false)
 
     if DoesEntityExist(npc) then
-        -- 2. Limpiar todas las tareas del NPC
         ClearPedTasks(npc)
-        
-        -- 3. Permitir que el NPC vuelva a su comportamiento normal (vagabundear)
         SetPedKeepTask(npc, false)
         TaskWanderInArea(npc, GetEntityCoords(npc), 10.0, 10.0, 10.0, 1.0, 1.0)
-        
-        -- 4. Limpiar la referencia global
         currentNPC = nil 
     end
 end)
