@@ -1,4 +1,4 @@
--- client/client.lua (CÓDIGO COMPLETO FINAL)
+-- client/client.lua (CÓDIGO COMPLETO FINAL - Detección, Menú, Animación y Huida/Ataque)
 
 local ESX = nil
 local isNearNPC = false
@@ -79,7 +79,6 @@ RegisterNetEvent('streetdealer:client:iniciarVenta', function(npc)
             local drugConfig = Config.Drogas[drugName]
             if drugConfig then
                 local playerCoords = GetEntityCoords(GetPlayerPed(-1))
-                -- Obtener la zona para estimación de precio
                 local zoneName = GetLabelText(GetNameOfZone(playerCoords.x, playerCoords.y, playerCoords.z))
                 local zoneConfig = Config.ZonasDeVenta[zoneName] or Config.ZonasDeVenta['DEFAULT']
                 local multiplier = zoneConfig.multiplier
@@ -97,7 +96,6 @@ RegisterNetEvent('streetdealer:client:iniciarVenta', function(npc)
 
         -- 3. Mostrar el menú de venta
         if #elements > 0 then
-            -- OBTENER LA ZONA AQUI PARA ENVIARLA AL SERVIDOR
             local playerCoords = GetEntityCoords(GetPlayerPed(-1))
             local zoneName = GetLabelText(GetNameOfZone(playerCoords.x, playerCoords.y, playerCoords.z))
 
@@ -120,12 +118,13 @@ RegisterNetEvent('streetdealer:client:iniciarVenta', function(npc)
                 end,
                 function(data, menu)
                     menu.close()
-                    TriggerEvent('streetdealer:client:resetNPC', currentNPC)
+                    -- Si cierra el menú sin hacer trato, el NPC simplemente sigue caminando (estado 0)
+                    TriggerEvent('streetdealer:client:resetNPC', currentNPC, 0) 
                 end
             )
         else
             ESX.ShowNotification("No tienes drogas para vender.")
-            TriggerEvent('streetdealer:client:resetNPC', currentNPC)
+            TriggerEvent('streetdealer:client:resetNPC', currentNPC, 0)
         end
     end)
 end)
@@ -154,14 +153,28 @@ RegisterNetEvent('streetdealer:client:playDealAnim', function()
     end
 end)
 
--- Función: Reseteo del NPC
-RegisterNetEvent('streetdealer:client:resetNPC', function(npc)
+-- Función: Reseteo del NPC con Lógica de Huida/Ataque
+-- AHORA RECIBE UN ESTADO: 0 (Normal/Éxito/Cierre), 1 (Asustado/Huye), 2 (Policía/Ataca)
+RegisterNetEvent('streetdealer:client:resetNPC', function(npc, state)
     SetPlayerControl(PlayerId(), true, false)
 
     if DoesEntityExist(npc) then
         ClearPedTasks(npc)
         SetPedKeepTask(npc, false)
-        TaskWanderInArea(npc, GetEntityCoords(npc), 10.0, 10.0, 10.0, 1.0, 1.0)
+
+        if state == 1 then
+            -- NPC Asustado: Huye del jugador
+            TaskSmartFleeCoord(npc, GetEntityCoords(GetPlayerPed(-1)), 100.0, -1, false, false)
+            
+        elseif state == 2 then
+            -- NPC Policía: Ataca/Persigue al jugador
+            TaskCombatPed(npc, GetPlayerPed(-1), 0, 16)
+            
+        else 
+            -- Venta Exitosa o Cierre de Menú: Vuelve a vagabundear
+            TaskWanderInArea(npc, GetEntityCoords(npc), 10.0, 10.0, 10.0, 1.0, 1.0)
+        end
+
         currentNPC = nil 
     end
 end)
