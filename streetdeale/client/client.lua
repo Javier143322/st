@@ -1,4 +1,4 @@
--- client/client.lua (CÓDIGO COMPLETO FINAL - Detección, Menú, Animación y Huida/Ataque)
+-- client/client.lua (CÓDIGO COMPLETO FINAL con FILTRO DE MODELOS NPC)
 
 local ESX = nil
 local isNearNPC = false
@@ -19,12 +19,53 @@ local function LoadAnimDict(dict)
     end
 end
 
+-- Función auxiliar para verificar si el modelo del NPC es válido
+local function IsModelValid(ped)
+    local pedHash = GetEntityModel(ped)
+    local pedModel = GetModelHash(pedHash) 
+    
+    -- Convertir la lista de nombres de modelos a hashes para una búsqueda más rápida
+    local allowedHashes = {}
+    for _, modelName in ipairs(Config.ModelosNPC.AllowedModels) do
+        table.insert(allowedHashes, GetHashKey(modelName))
+    end
+    
+    local excludedHashes = {}
+    for _, modelName in ipairs(Config.ModelosNPC.ExcludedModels) do
+        table.insert(excludedHashes, GetHashKey(modelName))
+    end
+
+    if Config.ModelosNPC.Whitelist then
+        -- Modo Whitelist: Debe estar en la lista de permitidos
+        for _, hash in ipairs(allowedHashes) do
+            if pedHash == hash then
+                return true
+            end
+        end
+        return false -- No está en la Whitelist
+    else
+        -- Modo Blacklist: No debe estar en la lista de excluidos
+        for _, hash in ipairs(excludedHashes) do
+            if pedHash == hash then
+                return false -- Está en la Blacklist
+            end
+        end
+        return true -- No está en la Blacklist
+    end
+end
+
 -- Función para comprobar si un ped es un NPC válido
 local function IsValidDealerTarget(ped)
+    -- 1. Chequeos básicos (jugador, vehículo, muerto)
     if IsPedAPlayer(ped) or IsPedInAnyVehicle(ped, false) or IsPedDeadOrDying(ped, true) then
         return false
     end
-    -- Lógica adicional de filtrado aquí...
+    
+    -- 2. Chequeo de modelo (NUEVA LÓGICA)
+    if not IsModelValid(ped) then
+        return false
+    end
+    
     return true
 end
 
@@ -38,7 +79,8 @@ Citizen.CreateThread(function()
         isNearNPC = false
 
         for _, ped in ipairs(GetGamePool('CPed')) do
-            if ped ~= playerPed and IsValidDealerTarget(ped) then
+            -- AHORA SE INCLUYE EL FILTRO DE MODELOS AQUÍ
+            if ped ~= playerPed and IsValidDealerTarget(ped) then 
                 local pedCoords = GetEntityCoords(ped)
                 local distance = #(playerCoords - pedCoords)
 
@@ -118,7 +160,7 @@ RegisterNetEvent('streetdealer:client:iniciarVenta', function(npc)
                 end,
                 function(data, menu)
                     menu.close()
-                    -- Si cierra el menú sin hacer trato, el NPC simplemente sigue caminando (estado 0)
+                    -- Estado 0: Vuelve a vagabundear (cierre normal)
                     TriggerEvent('streetdealer:client:resetNPC', currentNPC, 0) 
                 end
             )
@@ -139,7 +181,6 @@ RegisterNetEvent('streetdealer:client:playDealAnim', function()
         
         LoadAnimDict(animDict)
 
-        -- Dar la espalda al NPC para la animación de 'pase rápido'
         TaskTurnPedToFaceEntity(playerPed, currentNPC, 500)
         Citizen.Wait(500)
         
@@ -154,7 +195,7 @@ RegisterNetEvent('streetdealer:client:playDealAnim', function()
 end)
 
 -- Función: Reseteo del NPC con Lógica de Huida/Ataque
--- AHORA RECIBE UN ESTADO: 0 (Normal/Éxito/Cierre), 1 (Asustado/Huye), 2 (Policía/Ataca)
+-- state: 0 (Normal/Éxito/Cierre), 1 (Asustado/Huye), 2 (Policía/Ataca)
 RegisterNetEvent('streetdealer:client:resetNPC', function(npc, state)
     SetPlayerControl(PlayerId(), true, false)
 
