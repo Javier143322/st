@@ -1,98 +1,166 @@
--- config.lua (CÓDIGO COMPLETO FINAL con ALERTA PARA MÉDICOS)
-
 Config = {}
 
--- [[ Zonas y Multiplicadores de Precios y Dueños ]]
--- ownerJob: El nombre del job que será alertado de actividad en su zona. 'none' si no tiene dueño.
-Config.ZonasDeVenta = {
-    -- ZONAS DE ALTO VALOR (Sin dueño por defecto)
-    ['VINEYARD'] = { multiplier = 1.35, label = 'Vinewood Hills', ownerJob = 'none' },
-    ['ROCKFORD'] = { multiplier = 1.25, label = 'Rockford Hills', ownerJob = 'none' },
-    ['DOWNTOWN'] = { multiplier = 1.15, label = 'Downtown Los Santos', ownerJob = 'none' },
-    
-    -- ZONAS DE BAJO VALOR (Controladas por pandillas)
-    ['RANCHO']   = { multiplier = 0.85, label = 'Rancho', ownerJob = 'bloods' }, 
-    ['DAVIS']    = { multiplier = 0.80, label = 'Davis', ownerJob = 'gang_a' },    
-    ['GROVE']    = { multiplier = 0.70, label = 'Grove Street Area', ownerJob = 'gang_b' },  
+-- [[ CONFIGURACIÓN PRINCIPAL ]]
+Config.Debug = false
+Config.EnableBlips = true
+Config.EnableAdvancedFeatures = true
 
-    -- ZONAS NEUTRAS O POR DEFECTO
-    ['VESPUCCI'] = { multiplier = 1.00, label = 'Vespucci Beach', ownerJob = 'none' },
-    ['CHILAD']   = { multiplier = 1.00, label = 'Chiliad Mountain', ownerJob = 'none' },
-    ['DELPERRO'] = { multiplier = 1.10, label = 'Del Perro', ownerJob = 'none' },
-    ['DEFAULT'] = { multiplier = 0.90, label = 'Zona Desconocida/Normal', ownerJob = 'none' },
+-- [[ ZONAS DE VENTA OPTIMIZADAS ]]
+Config.ZonasDeVenta = {
+    ['VINEYARD'] = { 
+        multiplier = 1.35, 
+        label = 'Vinewood Hills', 
+        ownerJob = 'none',
+        heatMultiplier = 0.8,
+        spawnChance = 0.3
+    },
+    ['ROCKFORD'] = { 
+        multiplier = 1.25, 
+        label = 'Rockford Hills', 
+        ownerJob = 'none',
+        heatMultiplier = 0.9,
+        spawnChance = 0.4
+    },
+    ['RANCHO']   = { 
+        multiplier = 0.85, 
+        label = 'Rancho', 
+        ownerJob = 'bloods',
+        heatMultiplier = 1.3,
+        spawnChance = 0.8
+    },
+    ['DEFAULT'] = { 
+        multiplier = 0.90, 
+        label = 'Zona Normal', 
+        ownerJob = 'none',
+        heatMultiplier = 1.0,
+        spawnChance = 0.6
+    },
 }
 
--- [[ Configuracion de Drogas ]]
+-- [[ SISTEMA DE DROGAS MEJORADO ]]
 Config.Drogas = {
     ['weed'] = {
-        label = 'Marihuana',
+        label = '💨 Marihuana',
         minPrice = 10,
         maxPrice = 25,
+        addictionLevel = 1,
+        policeInterest = 1,
+        qualityMultiplier = 1.2
     },
     ['cocaine'] = {
-        label = 'Cocaína',
+        label = '❄️ Cocaína', 
         minPrice = 150,
         maxPrice = 250,
+        addictionLevel = 8,
+        policeInterest = 9,
+        qualityMultiplier = 1.5
     },
     ['meth'] = {
-        label = 'Metanfetamina',
+        label = '💊 Metanfetamina',
         minPrice = 100,
         maxPrice = 180,
+        addictionLevel = 7,
+        policeInterest = 8,
+        qualityMultiplier = 1.4
     }
 }
 
--- [[ Configuracion de Riesgos BASE y Reputación ]]
+-- [[ SISTEMA DE HABILIDADES DEALER ]]
+Config.Habilidades = {
+    ['persuasion'] = {
+        label = 'Persuasión',
+        maxLevel = 10,
+        effect = function(level)
+            return 1 + (level * 0.05)
+        end
+    },
+    ['stealth'] = {
+        label = 'Sigilo', 
+        maxLevel = 10,
+        effect = function(level)
+            return 1 - (level * 0.03)
+        end
+    },
+    ['networking'] = {
+        label = 'Contactos',
+        maxLevel = 5,
+        effect = function(level)
+            return level * 2
+        end
+    }
+}
+
+-- [[ CLIENTES ESPECIALES ]]
+Config.ClientesEspeciales = {
+    ['rico'] = {
+        model = 'a_m_m_business_01',
+        multiplier = 2.0,
+        minReputation = 100,
+        chance = 0.1
+    },
+    ['adicto'] = {
+        model = 'a_m_m_tramp_01', 
+        multiplier = 0.7,
+        minReputation = 50,
+        chance = 0.2,
+        bulkBuy = true
+    }
+}
+
+-- [[ RIESGOS Y MECÁNICAS ]]
 Config.Riesgo = {
-    rangoDeteccion = 3.0,  
-    
-    ProbabilidadPolisBase = 5,   
-    ProbabilidadCorrerBase = 15, 
-    
-    TiempoAnimacion = 3000,      
+    rangoDeteccion = 3.0,
+    ProbabilidadPolisBase = 5,
+    ProbabilidadCorrerBase = 15,
+    TiempoAnimacion = 3000,
+    CooldownEntreVentas = 30000,
+    MaxVentasPorMinuto = 3
 }
 
-Config.Reputacion = {
-    MaxReputacion = 1000,
-    PuntosPorVentaExitosa = 5,
-    MaxReduccionPorc = 4,           
-    PuntosParaMaximaReduccion = 500
+-- [[ SISTEMA DE MERCADO NEGRO ]]
+Config.MercadoNegro = {
+    enabled = true,
+    priceFluctuation = 0.2,
+    updateInterval = 300,
+    demandEffect = 0.1
 }
 
--- [[ CONFIGURACIÓN: HEAT LOCAL (Riesgo en el Área) ]]
-Config.Heat = {
-    HeatRadius = 50.0,             
-    SalesToTriggerHeat = 3,        
-    MaxHeatRiskIncrease = 10,      
-    HeatDurationSeconds = 300,     
-}
-
--- [[ CONFIGURACIÓN: ALERTA DE INVASIÓN (Pandillas) ]]
-Config.AlertaInvasion = {
-    HeatThreshold = 5,             -- Cuántas ventas recientes (activeSales) se necesitan en la zona.
-    JobAlertColor = 'error',       
-    CoolDownTime = 120,            
-}
-
--- [[ NUEVA CONFIGURACIÓN: ALERTA DE USO DE DROGAS (Médicos) ]]
+-- [[ ALERTAS MEJORADAS ]]
 Config.AlertaMedicos = {
-    MedicJobName = 'ambulance',     -- Nombre del trabajo de paramédico/enfermero (e.g. 'ambulance', 'medic')
-    GlobalSaleThreshold = 10,       -- Número TOTAL de ventas en la ciudad para disparar la alerta.
-    AlertColor = 'inform',          -- Color de la notificación (e.g. 'success', 'inform', 'warning').
-    CoolDownTime = 300,             -- Tiempo de espera (en segundos, 5 minutos) entre alertas.
+    MedicJobName = 'ambulance',
+    GlobalSaleThreshold = 8,
+    AlertColor = 'inform',
+    CoolDownTime = 300,
+    EnableOverdoseAlerts = true
 }
 
--- [[ CONFIGURACIÓN: FILTRO DE MODELOS DE NPC ]]
+Config.AlertaInvasion = {
+    HeatThreshold = 4,
+    JobAlertColor = 'error', 
+    CoolDownTime = 120,
+    EnableRetaliation = true
+}
 
+-- [[ OPTIMIZACIÓN DE NPCs ]]
+Config.NPCOptimization = {
+    MaxActiveNPCs = 15,
+    SpawnRadius = 100.0,
+    DespawnRadius = 150.0,
+    CheckInterval = 2000,
+    EnablePooling = true
+}
+
+-- [[ MODELOS NPC OPTIMIZADOS ]]
 Config.ModelosNPC = {
-    Whitelist = true, 
+    Whitelist = true,
+    CacheModels = true,
     
     AllowedModels = {
         'a_m_m_hillbilly_01', 'a_f_m_beach_01', 'a_m_m_bevhills_02',
         'g_m_y_famfor_01', 'g_m_y_famdnf_01', 'a_m_m_tramp_01',
         'csb_car3guy1', 'csb_chef', 's_m_m_autoshop_01',
-    },
-
-    ExcludedModels = {
-        's_m_y_cop_01', 's_m_y_hwaycop_01', 's_f_y_hooker_01', 'a_m_m_business_01',
+        'a_m_y_skater_01', 'a_f_y_hipster_01', 'a_m_m_tourist_01'
     }
 }
+
+print('[STREETDEALER] Configuración mejorada cargada')
